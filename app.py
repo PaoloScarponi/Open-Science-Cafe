@@ -96,7 +96,7 @@ async def get_projects_info() -> dict[str, ProjectInfo]:
     return projects_info
 
 @app.post('/find_contributors')
-async def find_contributors(project_description: str) -> dict[str, UserSkills]:
+async def find_contributors(project_description: str) -> dict[str, list[str]]:
 
     # user skills fetching
     users_skills = await get_users_skills()
@@ -117,7 +117,9 @@ async def find_contributors(project_description: str) -> dict[str, UserSkills]:
     # response post-processing
     response = response.choices[0].message.content
     response = json.loads(response[response.find('{'):])
-    response = {k: UserSkills(**v) for k, v in response.items()}
+    # response = {k: UserSkills(**v) for k, v in response.items()}
+    response = {'recommended_contributors': [name for name in response.keys()]}
+
 
     # return the response
     return response
