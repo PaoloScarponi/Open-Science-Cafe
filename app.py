@@ -2,8 +2,6 @@
 import os
 import json
 import openai
-from pathlib import Path
-from datetime import date
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -32,6 +30,13 @@ async def startup_event():
 
     # openai configuration
     openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# app shutdown operations
+@app.on_event('shutdown')
+async def shutdown_event():
+
+    # db connection closing
+    app.db.client.close()
 
 
 # endpoints
@@ -68,7 +73,7 @@ async def get_users_skills() -> dict[str, UserSkills]:
     # conversation history retrival
     for user_record in app.users.find():
         current_user = User(**user_record)
-        users_skills[current_user.nickname] = UserSkills(
+        users_skills[current_user.name] = UserSkills(
              skills=current_user.interests_skills
              )
 
@@ -89,3 +94,30 @@ async def get_projects_info() -> dict[str, ProjectInfo]:
              )
 
     return projects_info
+
+@app.post('/find_contributors')
+async def find_contributors(project_description: str) -> dict[str, UserSkills]:
+
+    # user skills fetching
+    users_skills = await get_users_skills()
+
+    # prompt construction
+    prompt = [
+        {
+            'role': 'user', 
+            'content': f"These are the users of our platform: {users_skills}. \
+                         Which one among them has the best skills for this project: {project_description}? \
+                         Return just names and skills of the the three best entries in the same json format."
+        }
+    ]
+
+    # invoke openapi endpoint
+    response = openai.ChatCompletion.create(model='gpt-3.5-turbo', messages=prompt)
+
+    # response post-processing
+    response = response.choices[0].message.content
+    response = json.loads(response[response.find('{'):])
+    response = {k: UserSkills(**v) for k, v in response.items()}
+
+    # return the response
+    return response
